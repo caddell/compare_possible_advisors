@@ -1,5 +1,6 @@
 library(scholar)
 library(tidyverse)
+library(ggthemes)
 
 #scholar package from https://github.com/jkeirstead/scholar
 
@@ -17,4 +18,11 @@ pubs <- get_publications(id1)
 
 id2 <- "0lTzdfwAAAAJ"
 
-compare_scholar_careers(ids = c(id1, id2))
+compare <- compare_scholar_careers(ids = c(id1, id2))
+
+ggplot(compare, aes(year, cites, color = name))+
+  geom_path()+
+  theme_minimal()+
+  theme(legend.position = 'bottom')+
+  scale_color_colorblind()
+
