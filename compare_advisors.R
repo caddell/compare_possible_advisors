@@ -8,6 +8,7 @@ library(ggrepel)
 
 #get scholar data
 id1 <- 'HaszNbkAAAAJ'
+id2 <- "0lTzdfwAAAAJ"
 
 # Get his profile and print his name
 profile <- get_profile(id1)
@@ -17,8 +18,6 @@ cites <- get_citation_history(id1)
 
 # Get his publications (a large data frame)
 pubs <- get_publications(id1)
-
-id2 <- "0lTzdfwAAAAJ"
 
 compare <- compare_scholar_careers(ids = c(id1, id2))
 
@@ -37,7 +36,7 @@ pull_recent_coauthors <- function(id, year_start) {
   coauthor_names <- pubs %>% 
     pmap_df(function(...){
         current <- tibble(...)
-        get_complete_authors(id = id, pubid = current$pubid)
+        get_complete_authors(id = id, pubid = current$pubid, delay = .5)
       })
   
   #pulls full names from coauthor_names
@@ -79,8 +78,6 @@ pull_recent_coauthors <- function(id, year_start) {
   return(coauthor_ids)
 }
 
-coauthor_ids <- pull_recent_coauthors(id = id2, year = 2018)
-
 #profile for list iteration
 get_whole_profile <- function(x){
   temp <- get_profile(id = x$scholar_id) 
@@ -98,17 +95,25 @@ pull_profile_data <- function(profile_list) {
   return(df)
 }
 
+#get scholar data
+id1 <- 'HaszNbkAAAAJ'
+id2 <- "0lTzdfwAAAAJ"
+
+coauthor_ids_id1<- pull_recent_coauthors(id = id1, year_start = 2018)
+coauthor_ids_id2<- pull_recent_coauthors(id = id2, year_start = 2018)
+
+#get profiles for each coauthor
 coauthor_details <- coauthor_ids %>% 
   split(., coauthor_ids) %>% 
   lapply(., get_whole_profile) 
 
+#get simple data and put it in dataframe for each coauthor
 coauthor_details_df <- coauthor_details %>% 
   lapply(., pull_profile_data) %>% 
   bind_rows()
 
+
 #circle packing plot https://www.r-graph-gallery.com/305-basic-circle-packing-with-one-level.html
-
-
 # Generate the layout. This function return a dataframe with one line per bubble. 
 # It gives its center (x and y) and its radius, proportional of the value
 packing <- circleProgressiveLayout(coauthor_details_df$h_index, sizetype='area')
