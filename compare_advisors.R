@@ -3,6 +3,7 @@ library(tidyverse)
 library(ggthemes)
 library(packcircles)
 library(ggrepel)
+library(patchwork)
 
 #scholar package from https://github.com/jkeirstead/scholar
 
@@ -81,7 +82,6 @@ pull_recent_coauthors <- function(id, year_start) {
 #profile for list iteration
 get_whole_profile <- function(x){
   temp <- get_profile(id = x$scholar_id) 
-  
   return(temp)
 }
 
@@ -102,37 +102,89 @@ id2 <- "0lTzdfwAAAAJ"
 coauthor_ids_id1<- pull_recent_coauthors(id = id1, year_start = 2018)
 coauthor_ids_id2<- pull_recent_coauthors(id = id2, year_start = 2018)
 
+#add tags and combine both sets
+coauthor_ids_id1 <- coauthor_ids_id1 %>% mutate(author_id = id1)
+coauthor_ids_id2 <- coauthor_ids_id2 %>% mutate(author_id = id2)
+
+coauthor_ids <- bind_rows(coauthor_ids_id1, coauthor_ids_id2)
+
 #get profiles for each coauthor
 coauthor_details <- coauthor_ids %>% 
-  split(., coauthor_ids) %>% 
+  select(scholar_id) %>% 
+  split(., coauthor_ids %>% select(scholar_id)) %>% 
   lapply(., get_whole_profile) 
 
 #get simple data and put it in dataframe for each coauthor
 coauthor_details_df <- coauthor_details %>% 
   lapply(., pull_profile_data) %>% 
-  bind_rows()
+  bind_rows() %>% 
+  left_join(coauthor_ids, by = c("id" = "scholar_id")) %>% 
+  mutate(label = case_when(id == author_id ~ name,
+                           TRUE ~ "")) %>% 
+  arrange(author_id)
 
 
 #circle packing plot https://www.r-graph-gallery.com/305-basic-circle-packing-with-one-level.html
 # Generate the layout. This function return a dataframe with one line per bubble. 
 # It gives its center (x and y) and its radius, proportional of the value
-packing <- circleProgressiveLayout(coauthor_details_df$h_index, sizetype='area')
 
-# We can add these packing information to the initial data frame
-coauthor_details_df <- cbind(coauthor_details_df, packing)
+draw_author_circle_graph <- function(coauthor_df, filter_author_id) {
+  # coauthor_df <- coauthor_details_df
+  # filter_author_id <- id2
+  max_h_index <- coauthor_df %>% select(h_index) %>% max()
+  
+  coauthor_df <- coauthor_df %>% 
+    filter(author_id == filter_author_id | h_index == max_h_index) %>% 
+    mutate(packing_id = row_number())
+  
+  packing <- circleProgressiveLayout(coauthor_df$h_index, sizetype='area') %>% 
+    mutate(packing_id = row_number())
+  
+  # We can add these packing information to the initial data frame / filter to authors we care about
+  coauthor_df <- cbind(coauthor_df, packing %>% select(-packing_id)) %>% 
+    filter(author_id == filter_author_id)
+  
+  packing <- semi_join(packing, coauthor_df)
+  
+  # The next step is to go from one center + a radius to the coordinates of a circle that
+  # is drawn by a multitude of straight lines.
+  dat.gg <- circleLayoutVertices(packing, npoints=50) %>% 
+    left_join(coauthor_df %>% select(label, packing_id), by = c("id" = "packing_id"))
+  
+  # Make the plot
+  p <- ggplot() + 
+    # Make the bubbles
+    geom_polygon(data = dat.gg, aes(x, y, group = id, fill = factor(label)), colour = "black", alpha = 0.6) +
+    # Add text in the center of each bubble + control its size
+    geom_text_repel(data = coauthor_df, aes(x, y, size=1, label = label)) +
+    scale_size_continuous(range = c(1,4)) +
+    scale_x_continuous(limits = c(-30,30))+
+    # General theme:
+    theme_void() + 
+    theme(legend.position="none") +
+    coord_equal()+
+    scale_fill_colorblind()
+  plot(p)
+  return(p)
+}
 
-# The next step is to go from one center + a radius to the coordinates of a circle that
-# is drawn by a multitude of straight lines.
-dat.gg <- circleLayoutVertices(packing, npoints=50)
+p1 <- draw_author_circle_graph(coauthor_details_df,id1)
+p2 <- draw_author_circle_graph(coauthor_details_df,id2)
 
-# Make the plot
-ggplot() + 
-  # Make the bubbles
-  geom_polygon(data = dat.gg, aes(x, y, group = id), fill = 'green', colour = "black", alpha = 0.6) +
-  # Add text in the center of each bubble + control its size
-  geom_text_repel(data = coauthor_details_df, aes(x, y, size=1, label = name)) +
-  scale_size_continuous(range = c(1,4)) +
-  # General theme:
-  theme_void() + 
-  theme(legend.position="none") +
-  coord_equal()
+#combine both plots
+p_combined <-  p1 + p2
+
+#find x and y ranges
+p_ranges_x <- c(ggplot_build(p_combined[[1]])$layout$panel_scales_x[[1]]$range$range,
+                ggplot_build(p_combined[[2]])$layout$panel_scales_x[[1]]$range$range)
+
+p_ranges_y <- c(ggplot_build(p_combined[[1]])$layout$panel_scales_y[[1]]$range$range,
+                ggplot_build(p_combined[[2]])$layout$panel_scales_y[[1]]$range$range)
+
+#plot with same scale
+p_combined +
+  plot_annotation(title = 'Author Networks (h-index as radius)',
+                  theme = theme(plot.title = element_text(hjust = 0.5))) & 
+  xlim(min(p_ranges_x), max(p_ranges_x)) & 
+  ylim(min(p_ranges_y), max(p_ranges_y)) 
+
