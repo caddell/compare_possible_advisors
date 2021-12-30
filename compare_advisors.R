@@ -156,7 +156,7 @@ draw_author_circle_graph <- function(coauthor_df, filter_author_id) {
     # Make the bubbles
     geom_polygon(data = dat.gg, aes(x, y, group = id, fill = factor(label)), colour = "black", alpha = 0.6) +
     # Add text in the center of each bubble + control its size
-    geom_text_repel(data = coauthor_df, aes(x, y, size=1, label = label)) +
+    #geom_text_repel(data = coauthor_df, aes(x, y, size=1, label = label)) +
     scale_size_continuous(range = c(1,4)) +
     scale_x_continuous(limits = c(-30,30))+
     # General theme:
@@ -183,8 +183,10 @@ p_ranges_y <- c(ggplot_build(p_combined[[1]])$layout$panel_scales_y[[1]]$range$r
 
 #plot with same scale
 p_combined +
-  plot_annotation(title = 'Author Networks (h-index as radius)',
-                  theme = theme(plot.title = element_text(hjust = 0.5))) & 
+  plot_annotation(title = 'Author Networks Since 2018 (h-index as radius)',
+                  subtitle = 'Potential PIs in gold',
+                  theme = theme(plot.title = element_text(hjust = 0.5),
+                                plot.subtitle = element_text(hjust = 0.5))) & 
   xlim(min(p_ranges_x), max(p_ranges_x)) & 
   ylim(min(p_ranges_y), max(p_ranges_y)) 
 
